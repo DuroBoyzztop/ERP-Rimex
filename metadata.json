@@ -1,0 +1,8 @@
+{
+  "name": "Remix ERP Inteligente - Dulce Capricho",
+  "description": "ERP empresarial para tienda de alimentos Master Chefs / Dulce Capricho en Maracay, Venezuela. Conectado a Google Sheets, Gmail, Calendar, Drive y Gemini AI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
