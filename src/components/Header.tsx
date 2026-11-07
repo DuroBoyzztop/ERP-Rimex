@@ -4,6 +4,7 @@ import {
   Sparkles,
   RefreshCw,
   FileSpreadsheet,
+  FileText,
   Globe,
   MapPin,
   TrendingUp,
@@ -13,6 +14,7 @@ import { Configuracion } from '../types';
 interface HeaderProps {
   config: Configuracion;
   onOpenAiCenter: () => void;
+  onOpenReportModal: () => void;
   onSyncSheets: () => void;
   syncingSheets: boolean;
   lastSyncTime?: string;
@@ -22,6 +24,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   config,
   onOpenAiCenter,
+  onOpenReportModal,
   onSyncSheets,
   syncingSheets,
   lastSyncTime,
@@ -78,6 +81,17 @@ export const Header: React.FC<HeaderProps> = ({
               {syncingSheets ? 'Sincronizando...' : 'Sincronizar BD ERP'}
             </span>
             <span className="md:hidden">Sync BD</span>
+          </button>
+
+          {/* Monthly PDF Report Button */}
+          <button
+            onClick={onOpenReportModal}
+            className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/70 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all active:scale-95 shadow-sm"
+            title="Generar y descargar reporte financiero mensual en PDF"
+          >
+            <FileText className="w-3.5 h-3.5 text-blue-400" />
+            <span className="hidden sm:inline">Reporte PDF</span>
+            <span className="sm:hidden">PDF</span>
           </button>
 
           {/* Sheet Link */}

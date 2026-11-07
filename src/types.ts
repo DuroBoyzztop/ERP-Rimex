@@ -47,6 +47,10 @@ export interface Pedido {
   Estado: 'Entregado' | 'Pendiente' | 'Cancelado';
   Fecha_Entrega_Estimada?: string;
   Notas?: string;
+  Calendar_Synced?: boolean;
+  Calendar_Event_Id?: string;
+  Calendar_Html_Link?: string;
+  Calendar_Sync_Time?: string;
 }
 
 export interface Factura {

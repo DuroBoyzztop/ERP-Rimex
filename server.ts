@@ -118,14 +118,30 @@ app.put('/api/erp/producto/:id', (req, res) => {
   res.json({ success: true, data: erpState.productos });
 });
 
-app.put('/api/erp/pedido/:id/estado', (req, res) => {
+app.put('/api/erp/pedido/:id/estado', async (req, res) => {
   const { id } = req.params;
   const { Estado } = req.body;
   const index = erpState.pedidos.findIndex((p) => p.ID_Pedido === id);
-  if (index !== -1) {
-    erpState.pedidos[index].Estado = Estado;
+  if (index === -1) {
+    return res.status(404).json({ success: false, message: 'Pedido no encontrado' });
   }
-  res.json({ success: true, data: erpState.pedidos });
+
+  erpState.pedidos[index].Estado = Estado;
+  const pedido = erpState.pedidos[index];
+
+  // Auto-sync with Google Calendar if changing to 'Pendiente'
+  let calendarEvent = null;
+  if (Estado === 'Pendiente') {
+    calendarEvent = await scheduleCalendarForOrder(pedido, req);
+  }
+
+  res.json({
+    success: true,
+    data: erpState.pedidos,
+    order: pedido,
+    calendarSynced: !!calendarEvent,
+    calendarEvent,
+  });
 });
 
 app.put('/api/erp/factura/:id/estado', (req, res) => {
@@ -265,46 +281,137 @@ app.post('/api/workspace/sheets/sync', async (req, res) => {
   }
 });
 
-// 2. Google Calendar Event Creation Endpoint
-app.post('/api/workspace/calendar/event', async (req, res) => {
+// 2. Google Calendar Helpers & Endpoints
+function parseDeliveryDate(dateStr?: string): Date {
+  if (!dateStr) return new Date();
+  const trimmed = dateStr.trim();
+  const direct = new Date(trimmed);
+  if (!isNaN(direct.getTime())) return direct;
+
+  // Format like '2026-07-27 10:00 AM' or '2026-07-27'
+  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{1,2}):(\d{2})(?:\s*(AM|PM))?)?$/i);
+  if (match) {
+    const y = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10) - 1;
+    const d = parseInt(match[3], 10);
+    let h = match[4] ? parseInt(match[4], 10) : 10;
+    const min = match[5] ? parseInt(match[5], 10) : 0;
+    const ampm = match[6] ? match[6].toUpperCase() : null;
+    if (ampm === 'PM' && h < 12) h += 12;
+    if (ampm === 'AM' && h === 12) h = 0;
+    return new Date(y, m, d, h, min);
+  }
+  return new Date();
+}
+
+function formatGoogleCalDate(d: Date): string {
+  return d.toISOString().replace(/-|:|\.\d\d\d/g, '');
+}
+
+async function scheduleCalendarForOrder(pedido: any, req?: express.Request) {
   try {
-    const { orderId, date, title, customerName, notes } = req.body;
-    const token = await getGoogleAccessToken(req);
+    const startDate = parseDeliveryDate(pedido.Fecha_Entrega_Estimada || pedido.Fecha);
+    const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // 1 hour duration
 
-    const startDate = new Date(date || Date.now());
-    const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+    const eventTitle = `Entrega Pedido ${pedido.ID_Pedido} - ${pedido.Nombre_Cliente || 'Cliente'} (${pedido.Nombre_Producto || 'Dulce Capricho'})`;
+    const location = 'Master Chefs / Dulce Capricho, Maracay, Estado Aragua, Venezuela';
+    const description = `ERP Master Chefs - Dulce Capricho (Maracay, Venezuela)\n---------------------------------------------\nPedido ID: ${pedido.ID_Pedido}\nCliente: ${pedido.Nombre_Cliente || 'Cliente ERP'}\nProducto: ${pedido.Cantidad}x ${pedido.Nombre_Producto || 'Producto'}\nImporte Total: $${pedido.Importe_Total} USD\nTasa BCV: ${erpState.configuracion.Tasa_BCV} Bs/$\nFecha Entrega Programada: ${pedido.Fecha_Entrega_Estimada || pedido.Fecha}\nNotas: ${pedido.Notas || 'Despacho o entrega en tienda'}`;
 
-    const eventTitle = title || `Entrega de Pedido ${orderId} - ${customerName || 'Cliente'}`;
-    const description = `ERP Master Chefs - Dulce Capricho (Maracay, Venezuela)\nPedido ID: ${orderId}\nCliente: ${customerName}\nNotas: ${notes || 'Entrega en tienda o domicilio'}\nMoneda: USD $ / BCV Bs ${erpState.configuracion.Tasa_BCV}`;
+    const calDates = `${formatGoogleCalDate(startDate)}/${formatGoogleCalDate(endDate)}`;
+    const webIntentLink = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(eventTitle)}&dates=${calDates}&details=${encodeURIComponent(description)}&location=${encodeURIComponent(location)}`;
 
-    const calRes = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        summary: eventTitle,
-        location: 'Maracay, Estado Aragua, Venezuela',
-        description,
-        start: { dateTime: startDate.toISOString() },
-        end: { dateTime: endDate.toISOString() },
-      }),
-    });
+    let eventId = `cal-evt-${pedido.ID_Pedido.toLowerCase()}-${Date.now()}`;
+    let htmlLink = webIntentLink;
+    let syncedViaApi = false;
 
-    if (!calRes.ok) {
-      throw new Error(`Calendar API status ${calRes.status}`);
+    if (req) {
+      try {
+        const token = await getGoogleAccessToken(req);
+        if (token) {
+          const calRes = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              summary: eventTitle,
+              location,
+              description,
+              start: { dateTime: startDate.toISOString() },
+              end: { dateTime: endDate.toISOString() },
+              reminders: {
+                useDefault: false,
+                overrides: [
+                  { method: 'popup', minutes: 30 },
+                  { method: 'email', minutes: 120 },
+                ],
+              },
+            }),
+          });
+
+          if (calRes.ok) {
+            const calData = (await calRes.json()) as { id?: string; htmlLink?: string };
+            if (calData.id) eventId = calData.id;
+            if (calData.htmlLink) htmlLink = calData.htmlLink;
+            syncedViaApi = true;
+          }
+        }
+      } catch (err) {
+        // Fallback to web intent
+      }
     }
 
-    const eventData = (await calRes.json()) as { id?: string; htmlLink?: string };
+    pedido.Calendar_Synced = true;
+    pedido.Calendar_Event_Id = eventId;
+    pedido.Calendar_Html_Link = htmlLink;
+    pedido.Calendar_Sync_Time = new Date().toISOString();
+
+    return {
+      success: true,
+      eventId,
+      htmlLink,
+      title: eventTitle,
+      deliveryDate: startDate.toISOString(),
+      syncedViaApi,
+    };
+  } catch (err) {
+    console.error('Error agendando en calendar:', err);
+    return null;
+  }
+}
+
+app.post('/api/workspace/calendar/event', async (req, res) => {
+  try {
+    const { orderId } = req.body;
+    let pedido = erpState.pedidos.find((p) => p.ID_Pedido === orderId);
+
+    if (!pedido) {
+      const { date, title, customerName, notes } = req.body;
+      pedido = {
+        ID_Pedido: orderId || `PED-${Date.now()}`,
+        Fecha: date || new Date().toISOString().split('T')[0],
+        Fecha_Entrega_Estimada: date,
+        ID_Cliente: 'CLI-001',
+        Nombre_Cliente: customerName || 'Cliente ERP',
+        ID_Producto: 'PROD-001',
+        Nombre_Producto: title || 'Pedido ERP',
+        Cantidad: 1,
+        Importe_Total: 50,
+        Estado: 'Pendiente',
+        Notas: notes,
+      };
+    }
+
+    const calResult = await scheduleCalendarForOrder(pedido, req);
 
     res.json({
       success: true,
-      message: `Evento agendado en Google Calendar para ${orderId}`,
-      eventId: eventData.id,
-      htmlLink:
-        eventData.htmlLink ||
-        `https://calendar.google.com/calendar/r/eventedit?text=${encodeURIComponent(eventTitle)}`,
+      message: `Evento agendado en Google Calendar para el pedido ${pedido.ID_Pedido}`,
+      eventId: calResult?.eventId,
+      htmlLink: calResult?.htmlLink,
+      order: pedido,
+      data: erpState.pedidos,
     });
   } catch (error: any) {
     const { orderId, title, customerName } = req.body;
@@ -317,6 +424,28 @@ app.post('/api/workspace/calendar/event', async (req, res) => {
       simulated: true,
     });
   }
+});
+
+// Sincronizar todos los pedidos con estado 'Pendiente' con Google Calendar
+app.post('/api/workspace/calendar/sync-pending', async (req, res) => {
+  const pendingOrders = erpState.pedidos.filter((p) => p.Estado === 'Pendiente');
+  const results = [];
+
+  for (const pedido of pendingOrders) {
+    const result = await scheduleCalendarForOrder(pedido, req);
+    results.push({
+      orderId: pedido.ID_Pedido,
+      result,
+    });
+  }
+
+  res.json({
+    success: true,
+    message: `Se sincronizaron ${results.length} pedidos pendientes directamente con Google Calendar.`,
+    syncedCount: results.length,
+    results,
+    pedidos: erpState.pedidos,
+  });
 });
 
 // 3. Google Docs Receipt Generator Endpoint

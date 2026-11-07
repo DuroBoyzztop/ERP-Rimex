@@ -10,6 +10,7 @@ import {
   AlertCircle,
   Clock,
   DollarSign,
+  FileText,
 } from 'lucide-react';
 import { Factura, Configuracion } from '../types';
 import { convertToCSV, downloadCSV } from '../utils/csvHelpers';
@@ -18,12 +19,14 @@ interface InvoicesViewProps {
   facturas: Factura[];
   config: Configuracion;
   onUpdateEstadoFactura: (id: string, estado: 'Pagada' | 'Pendiente' | 'Vencida') => void;
+  onOpenReportModal?: () => void;
 }
 
 export const InvoicesView: React.FC<InvoicesViewProps> = ({
   facturas,
   config,
   onUpdateEstadoFactura,
+  onOpenReportModal,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'Todas' | 'Pagada' | 'Pendiente' | 'Vencida'>('Todas');
@@ -101,13 +104,26 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={handleExportCSV}
-          className="flex items-center gap-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/60 px-3.5 py-2 rounded-xl text-xs font-medium transition-all"
-        >
-          <Download className="w-3.5 h-3.5" />
-          <span>Exportar CSV</span>
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {onOpenReportModal && (
+            <button
+              onClick={onOpenReportModal}
+              className="flex items-center gap-2 bg-blue-600/10 hover:bg-blue-600/20 text-blue-300 border border-blue-500/30 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 shadow-sm"
+              title="Generar reporte financiero mensual en PDF"
+            >
+              <FileText className="w-3.5 h-3.5 text-blue-400" />
+              <span>Reporte Mensual PDF</span>
+            </button>
+          )}
+
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/60 px-3.5 py-2 rounded-xl text-xs font-medium transition-all"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Exportar CSV</span>
+          </button>
+        </div>
       </div>
 
       {/* Gmail Send Result Notification Banner */}

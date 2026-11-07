@@ -7,6 +7,7 @@ import {
   Truck,
   ClipboardList,
   Receipt,
+  FileText,
   Brain,
   FolderSync,
   Building2,
@@ -21,12 +22,14 @@ export type TabType =
   | 'proveedores'
   | 'pedidos'
   | 'facturacion'
+  | 'reportes'
   | 'ai-center'
   | 'workspace';
 
 interface SidebarProps {
   activeTab: TabType;
   setActiveTab: (tab: TabType) => void;
+  onOpenReportModal?: () => void;
   pendingOrdersCount: number;
   pendingInvoicesCount: number;
   lowStockCount: number;
@@ -70,6 +73,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: Receipt,
       badge: pendingInvoicesCount,
       badgeColor: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+    },
+    {
+      id: 'reportes',
+      label: 'Reportes PDF',
+      icon: FileText,
+      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
     },
     {
       id: 'ai-center',

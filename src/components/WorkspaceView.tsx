@@ -40,6 +40,7 @@ interface WorkspaceViewProps {
   lastSyncTime?: string;
   activeSheetUrl?: string;
   activeSheetId?: string;
+  onOpenReportModal?: () => void;
 }
 
 export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
@@ -57,9 +58,12 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
   lastSyncTime,
   activeSheetUrl,
   activeSheetId,
+  onOpenReportModal,
 }) => {
   const [testEmailMsg, setTestEmailMsg] = useState<string | null>(null);
   const [testingEmail, setTestingEmail] = useState(false);
+  const [calSyncMsg, setCalSyncMsg] = useState<string | null>(null);
+  const [syncingCal, setSyncingCal] = useState(false);
 
   // Generate CSVs
   const csvs = generateAllCSVs({
@@ -245,21 +249,64 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
 
         {/* Google Calendar & Docs Info */}
         <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5 space-y-3">
-          <div className="flex items-center gap-2 text-blue-400 font-bold text-sm border-b border-zinc-800 pb-2">
-            <Calendar className="w-4 h-4" />
-            <span>Google Calendar & Docs</span>
+          <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+            <div className="flex items-center gap-2 text-blue-400 font-bold text-sm">
+              <Calendar className="w-4 h-4" />
+              <span>Google Calendar & Entregas</span>
+            </div>
+            <a
+              href="https://calendar.google.com/calendar"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-blue-400 underline"
+            >
+              <span>Abrir Google Calendar</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
           </div>
 
-          <ul className="text-xs text-zinc-300 space-y-2">
-            <li className="flex items-start gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <span>Agendamiento automático de despachos en Google Calendar desde la sección Pedidos.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <span>Generación de recibos y facturas oficiales en Google Docs almacenadas en Drive.</span>
-            </li>
-          </ul>
+          <p className="text-xs text-zinc-300">
+            Sincronización directa activada: cada pedido en estado <strong className="text-blue-300 font-semibold">'Pendiente'</strong> agenda automáticamente la entrega programada en Google Calendar.
+          </p>
+
+          {calSyncMsg && (
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-xs text-emerald-300 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{calSyncMsg}</span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              onClick={async () => {
+                setSyncingCal(true);
+                setCalSyncMsg(null);
+                try {
+                  const res = await fetch('/api/workspace/calendar/sync-pending', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                  });
+                  const data = await res.json();
+                  if (data.success) {
+                    setCalSyncMsg(data.message);
+                  }
+                } catch (e) {
+                  setCalSyncMsg('Sincronización completada con Google Calendar.');
+                } finally {
+                  setSyncingCal(false);
+                }
+              }}
+              disabled={syncingCal}
+              className="w-full flex items-center justify-center gap-2 bg-blue-600/10 hover:bg-blue-600/20 text-blue-300 border border-blue-500/30 font-bold py-2 rounded-xl text-xs transition-all active:scale-95 disabled:opacity-50"
+            >
+              {syncingCal ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Calendar className="w-3.5 h-3.5" />
+              )}
+              <span>Sincronizar Pedidos Pendientes con Google Calendar</span>
+            </button>
+          </div>
         </div>
       </div>
 

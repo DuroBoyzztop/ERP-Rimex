@@ -10,6 +10,7 @@ import { OrdersView } from './components/OrdersView';
 import { InvoicesView } from './components/InvoicesView';
 import { WorkspaceView } from './components/WorkspaceView';
 import { AiCenterModal } from './components/AiCenterModal';
+import { MonthlyReportModal } from './components/MonthlyReportModal';
 import {
   Cliente,
   Producto,
@@ -36,6 +37,7 @@ import {
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [isAiCenterOpen, setIsAiCenterOpen] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   // ERP State
   const [config, setConfig] = useState<Configuracion>(INITIAL_CONFIG);
@@ -162,18 +164,26 @@ export default function App() {
     }).catch(console.error);
   };
 
-  const handleUpdateEstadoPedido = (
+  const handleUpdateEstadoPedido = async (
     id: string,
     estado: 'Entregado' | 'Pendiente' | 'Cancelado'
   ) => {
     setPedidos((prev) =>
       prev.map((p) => (p.ID_Pedido === id ? { ...p, Estado: estado } : p))
     );
-    fetch(`/api/erp/pedido/${id}/estado`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ Estado: estado }),
-    }).catch(console.error);
+    try {
+      const res = await fetch(`/api/erp/pedido/${id}/estado`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ Estado: estado }),
+      });
+      const resData = await res.json();
+      if (resData.success && resData.data) {
+        setPedidos(resData.data);
+      }
+    } catch (err) {
+      console.error('Error actualizando estado de pedido:', err);
+    }
   };
 
   const handleUpdateEstadoFactura = (
@@ -201,6 +211,7 @@ export default function App() {
       <Header
         config={config}
         onOpenAiCenter={() => setIsAiCenterOpen(true)}
+        onOpenReportModal={() => setIsReportModalOpen(true)}
         onSyncSheets={handleSyncSheets}
         syncingSheets={syncingSheets}
         lastSyncTime={lastSyncTime}
@@ -211,14 +222,17 @@ export default function App() {
       <div className="flex-1 flex flex-col lg:flex-row">
         {/* Left Sidebar */}
         <Sidebar
-          activeTab={activeTab === 'ai-center' ? 'dashboard' : activeTab}
+          activeTab={activeTab === 'ai-center' || activeTab === 'reportes' ? 'dashboard' : activeTab}
           setActiveTab={(tab) => {
             if (tab === 'ai-center') {
               setIsAiCenterOpen(true);
+            } else if (tab === 'reportes') {
+              setIsReportModalOpen(true);
             } else {
               setActiveTab(tab);
             }
           }}
+          onOpenReportModal={() => setIsReportModalOpen(true)}
           pendingOrdersCount={pendingOrdersCount}
           pendingInvoicesCount={pendingInvoicesCount}
           lowStockCount={lowStockCount}
@@ -236,6 +250,7 @@ export default function App() {
               campanas={campanas}
               config={config}
               onOpenAiCenter={() => setIsAiCenterOpen(true)}
+              onOpenReportModal={() => setIsReportModalOpen(true)}
               setActiveTab={setActiveTab}
             />
           )}
@@ -286,6 +301,7 @@ export default function App() {
               facturas={facturas}
               config={config}
               onUpdateEstadoFactura={handleUpdateEstadoFactura}
+              onOpenReportModal={() => setIsReportModalOpen(true)}
             />
           )}
 
@@ -305,6 +321,7 @@ export default function App() {
               lastSyncTime={lastSyncTime}
               activeSheetUrl={activeSheetUrl}
               activeSheetId={activeSheetId}
+              onOpenReportModal={() => setIsReportModalOpen(true)}
             />
           )}
         </main>
@@ -314,6 +331,17 @@ export default function App() {
       <AiCenterModal
         isOpen={isAiCenterOpen}
         onClose={() => setIsAiCenterOpen(false)}
+      />
+
+      {/* Monthly Financial PDF Report Modal */}
+      <MonthlyReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        facturas={facturas}
+        gastos={gastos}
+        comprasProveedores={comprasProveedores}
+        pedidos={pedidos}
+        config={config}
       />
     </div>
   );

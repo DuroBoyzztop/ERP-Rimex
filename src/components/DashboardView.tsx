@@ -11,6 +11,7 @@ import {
   ArrowDownRight,
   Brain,
   Sparkles,
+  FileText,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -42,6 +43,7 @@ interface DashboardViewProps {
   campanas: Campaña[];
   config: Configuracion;
   onOpenAiCenter: () => void;
+  onOpenReportModal?: () => void;
   setActiveTab: (tab: any) => void;
 }
 
@@ -56,6 +58,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   campanas,
   config,
   onOpenAiCenter,
+  onOpenReportModal,
   setActiveTab,
 }) => {
   // Financial Calculations
@@ -120,13 +123,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </p>
           </div>
 
-          <button
-            onClick={onOpenAiCenter}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm px-6 py-3 rounded-full shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all active:scale-95 shrink-0"
-          >
-            <Brain className="w-4 h-4" />
-            <span>ANALIZAR EMPRESA</span>
-          </button>
+          <div className="flex items-center gap-3 flex-wrap">
+            {onOpenReportModal && (
+              <button
+                onClick={onOpenReportModal}
+                className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold text-xs sm:text-sm px-5 py-3 rounded-full border border-zinc-700 transition-all active:scale-95 shadow-sm"
+              >
+                <FileText className="w-4 h-4 text-blue-400" />
+                <span>REPORTE MENSUAL PDF</span>
+              </button>
+            )}
+
+            <button
+              onClick={onOpenAiCenter}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm px-6 py-3 rounded-full shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all active:scale-95 shrink-0"
+            >
+              <Brain className="w-4 h-4" />
+              <span>ANALIZAR EMPRESA</span>
+            </button>
+          </div>
         </div>
       </div>
 
